@@ -22,6 +22,8 @@ To destroy service and cluster.
 helm delete --purge devopsmiami
 terraform destroy
 ```
+# Phase 1 - Plain Ol' Blog (HTTP Only)
+This repo is split into multiple phases to better explain the changes happening in the infrastructure. In the first phase we will have only the blog exposed to the web on top of the Kube cluster.
 
 ## Kube Cluster
 These are the steps to get the demo blog rolling.
@@ -37,11 +39,14 @@ These are the steps to get the demo blog rolling.
 * Run Helm
 
 ## Terraform
-Using Terraform to provision a Kubernetes cluster on Google Cloud Engine. The `kubeCluster.tf` file contains the instructions to use a module that will setup our Kube cluster with no grief.
+Using Terraform to provision a Kubernetes cluster on Google Cloud Engine. The `kubeCluster.tf` file contains the instructions to use a module that will setup our Kube cluster with no grief. `Secrets.tf` contains all the secrets we don't want in version control and needs to be created by you.
+
 [Terraform Module](https://www.terraform.io/docs/providers/google/r/container_cluster.html)
 
 ### Setup the vars file
-All the variables are contained in a separate file not stored in version control. Create the file and add the required values.
+All the variables are contained in a separate file not stored in version control for security purposes. Create a file called `secrets.tf`, add the values below, and replace the relevant sections.
+
+`secrets.tf`
 ```yaml
 # Cluster name
 variable "name" {
@@ -76,18 +81,20 @@ variable "additional_zones" {
 # Domain label
 variable "domain_label" {
   type = "string"
-}
   default = "devopsmiami"
+}
 ```
 
 ### GCP Access Token
 Install their CLI tool and create a token you can use. This is beyond the scope of this tutorial and you should reference the documents for how to create the access token required to continue.
 ```shell
-export GOOGLE_APPLICATION_CREDENTIALS=./accessKey.json
+export GOOGLE_APPLICATION_CREDENTIALS=./accessToken.json
 ```
+*If this is a new project and you have never used Kubernetes before you will need to go to the Kubernetes sections on the console(website).*
+
 Now we have all the parts we need. A token for accessing GCP, instructions for Terraform, and secrets to fill in the blanks.
 ```shell
-terraform apply -var "environment=production"
+terraform apply -var "environment=demo"
 ```
 ## Helm
 Its a more advanced manager for deloying services.. oooo shiny! I like shiny.
@@ -116,6 +123,7 @@ Add these lines above externlDatabase to set the db password ghost is going to u
 ## Local database configuration
 ghostDatabasePassword: morelongStringyPasswords #needs to match rootUser pw above
 ```
+
 #### LB IP reservation
 We need a public facing IP, we can reserve one ahead of time and set it with the `ghostLoadBalancerIP`. Run the following commands then set variable to the ip address in the secrets file.
 ```shell
@@ -126,7 +134,7 @@ $ gcloud compute addresses create ghost-public-ip
 Helm doesnt work out of the box from the looks(--rbac something maybe?). Run the following to get it going. Make sure you created your `secrets.yml` and set the required values.
 ```shell
 # Helm bug
-helm init # adds a tiller service to your cluster
+helm init --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}' # adds a tiller service to your cluster with secret storage
 kubectl create serviceaccount --namespace kube-system tiller
 kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
 kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
@@ -176,53 +184,24 @@ helm install stable/kube-lego \
   --set rbac.create=true,config.LEGO_EMAIL=$EMAIL,config.LEGO_URL=https://acme-v01.api.letsencrypt.org/directory
 ```
 
-Point to the `tls-ingress` yaml and trigger the Let's Encrypt process.
+Point to the `ingress-tls.yaml` and trigger the *Let's Encrypt* process.
 ```shell
-kubectl apply -f tls-ingress.yaml
+kubectl apply -f ingress-tls.yaml
 ```
 
 # Configuring Ghost
 *Google Analytics* for site statistics and a style block to override css on the theme. Anything you add to the `Blog Header` section gets injected into each page on the blog.
 
-## Ghost Theme
-The theme can be updated from code injection page by adding the following to the `Blog Header` section.
-[Mapache Ghost Theme](https://github.com/godofredoninja/Mapache)
-```html
-<style>
-:root {
-  --primary-color: #2b2b2b;
-  --header-color: #FFFFFF;
-  --header-color-hover: #8a0000;
-  --post-color-link: #8a0000;
-  --story-cover-category-color: #8a0000;
-  --footer-color-link: #8a0000;
-  --composite-color: #8a0000;
-}
-.button--primary {
-    border-color: rgba(196, 50, 53, 1);
-    color: rgba(196, 50, 53, 1);
-}
-.u-accentColor--iconNormal {
-    color: rgba(196, 50, 53, 1);
-    fill: rgba(196, 50, 53, 1);
-}
-.button--dark:hover {
-    background: rgba(196, 50, 53, 1);
-    border-color: rgba(196, 50, 53, 1);
-}
-mark {background-image: linear-gradient(to bottom, rgba(255, 220, 214, 1), rgba(255, 220, 214, 1)) !important;}
-</style>
-```
 ## Google Analytics
 Google Analytics gives insight to the traffic of the site. Metrics for the who, what, when, and where. When you plug the correct block of code into the `Blog Header` section this information will be passed over to `analytics.google.com`.  
 ```html
 <!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=$ID"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=$accountID"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
-  gtag('config', '$ID');
+  gtag('config', '$accountID');
 </script>
 ```
