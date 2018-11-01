@@ -25,7 +25,7 @@ resource "google_container_cluster" "primary" {
       domain = "${var.domain_label}"
     }
 
-    tags = ["ghost", "jenkins"]
+    tags = "${var.tags}"
   }
 
   addons_config {
