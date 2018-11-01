@@ -1,4 +1,4 @@
 terraform.tfstate*
 .terraform
-accessKey.json
+accessToken.json
 secrets*
