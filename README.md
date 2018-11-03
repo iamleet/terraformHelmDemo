@@ -45,15 +45,15 @@ Using Terraform to provision a Kubernetes cluster on Google Cloud Engine. The `k
 [Terraform Module](https://www.terraform.io/docs/providers/google/r/container_cluster.html)
 
 ### Terraform Secrets
-The values we like to keep out of version control are kept in a `secrets.tf` file. Rename the `example-secrets.tf` file to `secrets.tf` and adjust the values. Items labels true in the chart below require an update before continuing.
+The values we like to keep out of version control are kept in a `secrets.tf` file. Rename the `example-secrets.tf` file to `secrets.tf` and adjust the values. Items labeled *required* in the chart below require an update before continuing.
 
 option | default | requires update
---- | --- | ---
+:---: | :---: | :---:
 Cluster Name | devopscluster |
 Node count | 1 |
-Project name | devops-miami-demo | true
+Project name | devops-miami-demo | *required*
 Cluster username | root |
-Cluster password | REPLACEME | true
+Cluster password | REPLACEME | *required*
 Availability zone | us-east1-c |
 Domain label | devopsmiami |
 Cluster Tags | blog, demo, helm, terraform |
@@ -71,111 +71,58 @@ terraform apply
 ```
 
 ## Helm
-Its a more advanced manager for deloying services.. oooo shiny! I like shiny.
+Quickly deploy services to Kubernetes cluster from code. *Oooo shiny! I like shiny.*
 It runs a Tiller agent which allows for two way communication, a lot more can get done. Sorry Terraform, you are just managing my clusters b.
 [Helm - A La Bitnami](https://docs.bitnami.com/kubernetes/how-to/deploy-application-kubernetes-helm/)
 
-## Secrets file
-Secrets are kept in a values yaml file called secrets and ignored by git.
-Example: [values.yml](https://github.com/helm/charts/blob/master/stable/ghost/values.yaml)
-
-Create a secrets file from the default example and fill in the following values.
-```yml
-# ghost section
-ghostLoadBalancerIP: SEE BELOW FOR LB INFO
-ghostBlogTitle: Devops Miami Blog
-ghostUsername: root
-ghostPassword: someLoginPassword
-ghostBlogTitle: The title of you blog
-## mysql section
-rootUser:
-  password: morelongStringyPasswords #must match db pw below
-```
-
-Add these lines above externlDatabase to set the db password ghost is going to use to connect to the DB.
-```yml
-## Local database configuration
-ghostDatabasePassword: morelongStringyPasswords #needs to match rootUser pw above
-```
-
-#### LB IP reservation
-We need a public facing IP, we can reserve one ahead of time and set it with the `ghostLoadBalancerIP`. Run the following commands then set variable to the ip address in the secrets file.
+### LB IP reservation
+We need a public facing IP; we can reserve one and set it with the `ghostLoadBalancerIP` in the following section. Run the following command then navigate in the console to `VPC network` -> `External IP addresses`.
 ```shell
 $ gcloud compute addresses create ghost-public-ip
 ```
 
+On this page you should see an entry labeled `ghost-public-ip`; copy the external address for the next step.
+
+### Secrets file
+Secrets are kept in a `example-values.yaml`. Rename it to `secrets.yaml` then update the required value. The chart below shows all the values which need to be updated tagged as *required*.
+
+Example: [values.yml](https://github.com/helm/charts/blob/master/stable/ghost/values.yaml)
+
+option | default | requires update | notes
+:---: | :---: | :---: | :---: |
+ghostLoadBalancerIP | no default | *required* | must match lb external IP
+ghostUsername | user@example.com | |
+ghostPassword | no default password | *required* |
+ghostEmail | user@example.com | | your login
+ghostDatabasePassword | no default password | *required* | must match mariadb.user.password & mariadb.rootUser.password
+mariadb.user.password | no default set | *required* | must match ghostDatabasePassword
+mariadb.rootUser.password | no default set | *required* | must match ghostDatabasePassword
+resources.cpu | 300m | *required* | set to 200m for clusters under 2 nodes
+
+*This Helm chart launches mariadb with the rootUser pw - might need to check that out*
+
+Add these lines above externlDatabase to set the db password ghost is going to use to connect to the DB.
+
 ### Helm and Tiller - Bleeding edge stuff
-Helm doesnt work out of the box from the looks(--rbac something maybe?). Run the following to get it going. Make sure you created your `secrets.yml` and set the required values.
+Helm requires a service account on the Kubernetes cluster in order to work correctly. Using a yaml file we can create what's required to get going.
 ```shell
 kubectl apply -f create-helm-service-account.yaml
 helm init --service-account helm --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}'
-
-# Initialize Helm
-helm init --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}'
 ```
+
+Give it a minute to provision your Tiller pod and then move to the next section. A quick way to test if it is running or not is running `helm list`. It will give you an error the Tiller pod is not running if it is still spinning up. Otherwise, it gives you back a blank return since nothing is running yet.
 
 ### Install Ghost Chart
 Ready to run Helm, init Tiller on the your Kube cluster and setup a Chart.
 ```shell
 # Run helm
 helm install --name demo-blog -f secrets.yaml stable/ghost
+```
 
+Now you should get a return that show s the `Blog URL` and `Admin URL` you can use any one of these to reach the site and confirm a successful deployment. Mind you this is not production ready.
+
+When you are finished exploring the blog and the deployment you can destory it with the following command:
+```shell
 # Destroy
-helm del --purge prod-devopsmiami-blog
-```
-
-## SSL with Lets Encrypt
-Who wants insecure sites? Not us. Using an Nginx container with Lets Encrypt we can proxy the Ghost for easy ssl.
-
-### Create the service.
-Launch the service via Helm.
-```shell
-helm install stable/nginx-ingress \
-  --namespace kube-system \
-  --name prod-devopsmiami-ingress
-```
-
-Turn off external access to the unsecured port on the Ghost app by switching it to the internal address.
-```yaml
-kubectl patch svc prod-devopsmiami-blog-ghost --type='json' -p '[{"op":"remove","path":"/spec/ports/0/nodePort"},{"op":"replace","path":"/spec/type","value":"ClusterIP"}]'
-```
-
-Create an ingress point.
-```shell
-kubectl apply -f ingress.yaml
-```
-
-At this point you should be able to see the page with SSL but not a valid cert.
-
-*Make sure to redirect your dns to the new IP address of the proxy because the next step will not work without a valid dns!*
-
-### Sign it
-Deploy a kube-lego container to pull a Let's Encrypt cert. Set the email to something that works for you.
-```shell
-helm install stable/kube-lego \
-  --namespace kube-system \
-  --name prod-lego-devopsmiami \
-  --set rbac.create=true,config.LEGO_EMAIL=$EMAIL,config.LEGO_URL=https://acme-v01.api.letsencrypt.org/directory
-```
-
-Point to the `ingress-tls.yaml` and trigger the *Let's Encrypt* process.
-```shell
-kubectl apply -f ingress-tls.yaml
-```
-
-# Configuring Ghost
-*Google Analytics* for site statistics and a style block to override css on the theme. Anything you add to the `Blog Header` section gets injected into each page on the blog.
-
-## Google Analytics
-Google Analytics gives insight to the traffic of the site. Metrics for the who, what, when, and where. When you plug the correct block of code into the `Blog Header` section this information will be passed over to `analytics.google.com`.  
-```html
-<!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=$accountID"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', '$accountID');
-</script>
+helm del --purge demo-blog
 ```
