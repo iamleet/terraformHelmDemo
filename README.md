@@ -10,7 +10,8 @@ Please check out the links for the tools we are using. Below is a brief descript
 * [Lets Encrypt](https://letsencrypt.org/) - free ssl encryption service.
 
 ## Top Level Commands
-At a high level this is what the process consists of. Terraform is used to provision the infrastructure components in this case a Kubernetes cluster and Helm is used to provision the service in this case a Ghost blog on the new cluster.
+At a high level this is what the process consists of.
+Terraform is used to provision the infrastructure components in this case a Kubernetes cluster and Helm is used to provision the service in this case a Ghost blog on the new cluster.
 
 To deploy a cluster and service.
 ```shell
@@ -43,59 +44,32 @@ Using Terraform to provision a Kubernetes cluster on Google Cloud Engine. The `k
 
 [Terraform Module](https://www.terraform.io/docs/providers/google/r/container_cluster.html)
 
-### Setup the vars file
-All the variables are contained in a separate file not stored in version control for security purposes. Create a file called `secrets.tf`, add the values below, and replace the relevant sections.
+### Terraform Secrets
+The values we like to keep out of version control are kept in a `secrets.tf` file. Rename the `example-secrets.tf` file to `secrets.tf` and adjust the values. Items labels true in the chart below require an update before continuing.
 
-`secrets.tf`
-```yaml
-# Cluster name
-variable "name" {
-  type = "string"
-  default = "devopsDemocluster"
-}
-# Project name
-variable "project" {
-  type = "string"
-  default = "devopsmiamiDemo-#######"
-}
-# Cluster username
-variable "username" {
-  type = "string"
-  default = "root"
-}
-# Cluster password
-variable "password" {
-  type = "string"
-  default = "longstringypassword"
-}
-# Availability zones
-variable "zone" {
-  type = "string"
-  default = "us-east1-c"
-}
-
-variable "additional_zones" {
-  type = "string"
-  default = "us-east1-b"
-}
-# Domain label
-variable "domain_label" {
-  type = "string"
-  default = "devopsmiami"
-}
-```
+option | default | requires update
+--- | --- | ---
+Cluster Name | devopscluster |
+Node count | 1 |
+Project name | devops-miami-demo | true
+Cluster username | root |
+Cluster password | REPLACEME | true
+Availability zone | us-east1-c |
+Domain label | devopsmiami |
+Cluster Tags | blog, demo, helm, terraform |
 
 ### GCP Access Token
-Install their CLI tool and create a token you can use. This is beyond the scope of this tutorial and you should reference the documents for how to create the access token required to continue.
+Install gcloud suite CLI tool and create a token you can use via the console. This is beyond the scope of this tutorial and you should reference the documents for how to create the access token required to continue. [How to Create Token](https://cloud.google.com/docs/authentication/production)
 ```shell
 export GOOGLE_APPLICATION_CREDENTIALS=./accessToken.json
 ```
-*If this is a new project and you have never used Kubernetes before you will need to go to the Kubernetes sections on the console(website).*
+*If this is a new project and you have never used Kubernetes Engine before you will need to visit the Kubernetes Engine section on the console(website) to initialize it.*
 
 Now we have all the parts we need. A token for accessing GCP, instructions for Terraform, and secrets to fill in the blanks.
 ```shell
-terraform apply -var "environment=demo"
+terraform apply
 ```
+
 ## Helm
 Its a more advanced manager for deloying services.. oooo shiny! I like shiny.
 It runs a Tiller agent which allows for two way communication, a lot more can get done. Sorry Terraform, you are just managing my clusters b.
@@ -133,19 +107,19 @@ $ gcloud compute addresses create ghost-public-ip
 ### Helm and Tiller - Bleeding edge stuff
 Helm doesnt work out of the box from the looks(--rbac something maybe?). Run the following to get it going. Make sure you created your `secrets.yml` and set the required values.
 ```shell
-# Helm bug
-helm init --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}' # adds a tiller service to your cluster with secret storage
-kubectl create serviceaccount --namespace kube-system tiller
-kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
-kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
+kubectl apply -f create-helm-service-account.yaml
+helm init --service-account helm --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}'
+
+# Initialize Helm
+helm init --override 'spec.template.spec.containers[0].command'='{/tiller,--storage=secret}'
 ```
-[patch role](https://github.com/helm/helm/issues/2224)
 
 ### Install Ghost Chart
 Ready to run Helm, init Tiller on the your Kube cluster and setup a Chart.
 ```shell
 # Run helm
-helm install --name prod-devopsmiami-blog -f secrets.yaml stable/ghost
+helm install --name demo-blog -f secrets.yaml stable/ghost
+
 # Destroy
 helm del --purge prod-devopsmiami-blog
 ```
