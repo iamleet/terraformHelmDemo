@@ -119,10 +119,12 @@ Ready to run Helm, init Tiller on the your Kube cluster and setup a Chart.
 helm install --name demo-blog -f secrets.yaml stable/ghost
 ```
 
-Now you should get a return that show s the `Blog URL` and `Admin URL` you can use any one of these to reach the site and confirm a successful deployment. Mind you this is not production ready.
+Now you should get a return that shows the `Blog URL` and `Admin URL` you can use any one of these to reach the site and confirm a successful deployment. Mind you this is not production ready.
 
-When you are finished exploring the blog and the deployment you can destory it with the following command:
+When you are finished exploring the blog and the deployment you can destroy it with the following command:
 ```shell
-# Destroy
+# Destroy the service
 helm del --purge demo-blog
+# Destroy the cluster
+terraform destroy
 ```
