@@ -2,7 +2,7 @@ resource "google_container_cluster" "primary" {
   name               = "${var.name}"
   project            = "${var.project}"
   zone               = "${var.zone}"
-  initial_node_count = 1
+  initial_node_count = "${var.nodeCount}"
 
   additional_zones = [
     "${var.additional_zones}"
