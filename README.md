@@ -93,7 +93,7 @@ Example: [values.yml](https://github.com/helm/charts/blob/master/stable/ghost/va
 option | default | requires update | notes
 :---: | :---: | :---: | :---: |
 db.password | random gen | I put this because I like the static pw, they have rando pw gen
-mariadb.rootUser.password | no default set | *required* | must match ghostDatabasePassword
+rootUser.password | no default set | *required* | must match ghostDatabasePassword
 resources.cpu | 300m | *required* | set to 200m for clusters under 2 nodes
 
 *This Helm chart launches mariadb with the rootUser pw - might need to check that out*
