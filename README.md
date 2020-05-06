@@ -88,14 +88,11 @@ Secrets are kept in a `example-values.yaml`. Rename it to `secrets.yaml` then up
 
 Example: [values.yml](https://github.com/helm/charts/blob/master/stable/ghost/values.yaml)
 
+*Update: I will typically rip the values file right out of git hub as they change as the helm charts are updated over time.*
+
 option | default | requires update | notes
 :---: | :---: | :---: | :---: |
-ghostLoadBalancerIP | no default | *required* | must match lb external IP
-ghostUsername | user@example.com | |
-ghostPassword | no default password | *required* |
-ghostEmail | user@example.com | | your login
-ghostDatabasePassword | no default password | *required* | must match mariadb.user.password & mariadb.rootUser.password
-mariadb.user.password | no default set | *required* | must match ghostDatabasePassword
+db.password | random gen | I put this because I like the static pw, they have rando pw gen
 mariadb.rootUser.password | no default set | *required* | must match ghostDatabasePassword
 resources.cpu | 300m | *required* | set to 200m for clusters under 2 nodes
 
